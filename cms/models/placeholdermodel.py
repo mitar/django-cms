@@ -24,7 +24,6 @@ class Placeholder(models.Model):
         """
         if request.user.is_superuser:
             return True
-        found = False
         # check all attached models for change permissions
         for model in self._get_attached_models():
             opts = model._meta
@@ -33,9 +32,7 @@ class Placeholder(models.Model):
             # if they don't have the permission for this attached model, bail out
             if not request.user.has_perm(perm_code):
                 return False
-            else:
-                found = True
-        return found
+        return True
 
     def has_change_permission(self, request):
         return self._get_permission(request, 'change')
