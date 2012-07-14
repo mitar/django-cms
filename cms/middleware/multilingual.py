@@ -9,6 +9,7 @@ import urllib
 import urlparse
 
 SUPPORTED = dict(settings.CMS_LANGUAGES)
+CMS_LANGUAGES_URL_IGNORE_PREFIXES = getattr(settings, 'CMS_LANGUAGES_URL_IGNORE_PREFIXES', ())
 
 HAS_LANG_PREFIX_RE = re.compile(r"^/(%s)/.*" % "|".join([re.escape(l[0]) for l in settings.CMS_LANGUAGES]))
 
@@ -18,6 +19,12 @@ def has_lang_prefix(path):
         return check.group(1)
     else:
         return False
+
+def starts_with_ignore_prefix(path):
+    for p in CMS_LANGUAGES_URL_IGNORE_PREFIXES:
+        if path.startswith(p):
+            return True
+    return False
 
 def patch_response(content, pages_root, language):
     # Customarily user pages are served from http://the.server.com/~username/
@@ -40,6 +47,7 @@ def patch_response(content, pages_root, language):
     quoted_root = urllib.quote(pages_root)
     ignore_paths = ['%s%s/' % (quoted_root, l[0]) for l in settings.CMS_LANGUAGES]
     ignore_paths += [settings.MEDIA_URL, settings.STATIC_URL]
+    ignore_paths += CMS_LANGUAGES_URL_IGNORE_PREFIXES
     if getattr(settings,'STATIC_URL', False):
         ignore_paths += [settings.STATIC_URL]
         
@@ -55,6 +63,7 @@ def patch_response(content, pages_root, language):
     
     ignore_paths = ['%s%s/' % (pages_root, l[0]) for l in settings.CMS_LANGUAGES]
     ignore_paths += [settings.MEDIA_URL, settings.STATIC_URL]
+    ignore_paths += CMS_LANGUAGES_URL_IGNORE_PREFIXES
     if getattr(settings,'STATIC_URL', False):
         ignore_paths += [settings.STATIC_URL]
     FORM_URL_FIX_RE = re.compile(ur'<form([^>]+)action=("|\')(?=%s)(?!(%s))(%s(.*?))("|\')(.*?)>' % (
@@ -112,6 +121,7 @@ class MultilingualURLMiddleware(object):
         
         if not path.startswith(settings.MEDIA_URL) and \
                 not path.startswith(settings.STATIC_URL) and \
+                not starts_with_ignore_prefix(path) and \
                 not (getattr(settings,'STATIC_URL', False) and path.startswith(settings.STATIC_URL)) and \
                 response.status_code == 200 and \
                 response._headers['content-type'][1].split(';')[0] == "text/html":
@@ -134,6 +144,7 @@ class MultilingualURLMiddleware(object):
                 response['Location'] = location
             if not has_lang_prefix(location) and location.startswith("/") and \
                     not location.startswith(settings.MEDIA_URL) and \
+                    not starts_with_ignore_prefix(location) and \
                     not (getattr(settings,'STATIC_URL', False) and location.startswith(settings.STATIC_URL)):
                 response['Location'] = "/%s%s" % (language, location)
         response.set_cookie("django_language", language)
